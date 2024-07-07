@@ -1,32 +1,109 @@
+<#PSScriptInfo
+.VERSION 1.0.3
+.GUID 4ee202bc-b16f-46b4-a15b-72ae9f4ae177
+.AUTHOR voytas75
+.TAGS ai,psaoai,llm,project,team,gpt
+.PROJECTURI https://github.com/voytas75/tdb
+.EXTERNALMODULEDEPENDENCIES
+.RELEASENOTES
+1.0.3[unpublished]: added listing tables.
+1.0.2: Improved modularity, added centralized error handling and logging. Enhanced documentation with detailed help blocks and a comprehensive usage guide. Included unit tests for all critical functions and ensured compatibility with different environments.
+1.0.1: initializing.
+#>
 <#
 .SYNOPSIS
-Simple Miniature Text Relational Database Management System (DBMS)
+Simple Miniature Text Relational Database Management System (TDB)
 
 .DESCRIPTION
 This PowerShell script implements a simple text-based relational DBMS. It supports CRUD operations, search functionality, indexing, and data integrity checks.
 The script is designed to be clean, efficient, and functional, adhering to best practices.
-
-.VERSION
-1.4.0
 
 .NOTES
 Version 1.4.0: Improved modularity, added centralized error handling and logging. Enhanced documentation with detailed help blocks and a comprehensive usage guide. Included unit tests for all critical functions and ensured compatibility with different environments.
 
 #>
 
-# Configuration Section
-$config = @{
-    LogFilePath    = "$env:USERPROFILE\Documents\PSTextDBMS\Logs\ScriptLog.txt"
-    DBDirectory    = "$env:USERPROFILE\Documents\PSTextDBMS\DB"
-    IndexDirectory = "$env:USERPROFILE\Documents\PSTextDBMS\DB\Indexes"
-    DefaultColumns = @("ID", "CreationTime")
+# Define the current version of the script
+$tdbVersion = "1.0.3"
+
+# Define the name of the script
+$scriptname = "tdb"
+
+# Default columns setting (system application setting)
+$DefaultColumns = @("ID", "CreationTime")
+
+
+function Get-LatestVersion {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$scriptName
+    )
+  
+    try {
+        # Find the script on PowerShell Gallery
+        $scriptInfo = Find-Script -Name $scriptName -ErrorAction Stop
+  
+        # Return the latest version
+        return $scriptInfo.Version
+    }
+    catch [System.Exception] {
+        $functionName = $MyInvocation.MyCommand.Name
+        Update-ErrorHandling -ErrorRecord $_ -ErrorContext "$functionName function" -LogFilePath $config.LogFilePath  
+        return $null
+    }
 }
 
-# Start Transcript for logging
-#Start-Transcript -Path $config.LogFilePath -Append
+function Get-CheckForScriptUpdate {
+    param (
+        [Parameter(Mandatory = $true)]
+        [version]$currentScriptVersion,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$scriptName
+    )
+    try {
+        # Retrieve the latest version of the script
+        $latestScriptVersion = Get-LatestVersion -scriptName $scriptName
+        if ($latestScriptVersion) {
+            # Compare the current version with the latest version
+            if (([version]$currentScriptVersion) -lt [version]$latestScriptVersion) {
+                Write-Host " A new version ($latestScriptVersion) of $scriptName is available. You are currently using version $currentScriptVersion. " -BackgroundColor DarkYellow -ForegroundColor Blue
+                write-Host "`n`n"
+            } 
+        }
+        else {
+            Write-Warning "Failed to check for the latest version of the script."
+        }
+    }
+    catch [System.Exception] {
+        $functionName = $MyInvocation.MyCommand.Name
+        Update-ErrorHandling -ErrorRecord $_ -ErrorContext "$functionName function" -LogFilePath $config.LogFilePath 
+    }
+
+}
+
+function Show-Banner {
+    Write-Host @'
+
+   _______________________/\\\___/\\\________        
+    ______________________\/\\\__\/\\\________       
+     _____/\\\_____________\/\\\__\/\\\________      
+      __/\\\\\\\\\\\________\/\\\__\/\\\________     
+       _\////\\\////____/\\\\\\\\\__\/\\\\\\\\\__    
+        ____\/\\\_______/\\\////\\\__\/\\\////\\\_   
+         ____\/\\\_/\\__\/\\\__\/\\\__\/\\\__\/\\\_  
+          ____\//\\\\\___\//\\\\\\\/\\_\/\\\\\\\\\__ 
+           _____\/////_____\///////\//__\/////////___
+   
+           powershell [t]ext [d]ata [b]ase
+           https://github.com/voytas75/tdb
+
+
+'@
+}
 
 # Logging function
-function Write-Log {
+function Write-tdbLog {
     param (
         [string]$Message,
         [string]$Level = "INFO"
@@ -40,19 +117,82 @@ function Write-Log {
 }
 
 # Error handling function
-function Handle-Error {
+function Handle-tdbError {
     param (
         [string]$ErrorMessage
     )
-    Write-Log -Message $ErrorMessage -Level "ERROR"
+    Write-tdbLog -Message $ErrorMessage -Level "ERROR"
     throw $ErrorMessage
 }
 
+function Update-ErrorHandling {
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.Management.Automation.ErrorRecord]$ErrorRecord,
+
+        [string]$ErrorContext,
+
+        [string]$LogFilePath
+    )
+
+    # Capture detailed error information
+    $errorDetails = [ordered]@{
+        Timestamp         = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        ErrorMessage      = $ErrorRecord.Exception.Message
+        ExceptionType     = $ErrorRecord.Exception.GetType().FullName
+        ErrorContext      = $ErrorContext
+        ScriptFullName    = $MyInvocation.ScriptName
+        LineNumber        = $MyInvocation.ScriptLineNumber
+        StackTrace        = $ErrorRecord.ScriptStackTrace
+        UserName          = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+        MachineName       = $env:COMPUTERNAME
+        PowerShellVersion = $PSVersionTable.PSVersion.ToString()
+
+    } | ConvertTo-Json
+
+    # Provide suggestions based on the error type
+    $suggestions = switch -Regex ($ErrorMessage) {
+        "PSScriptAnalyzer" {
+            "Ensure the PSScriptAnalyzer module is installed and up-to-date. Use 'Install-Module -Name PSScriptAnalyzer' or 'Update-Module -Name PSScriptAnalyzer'."
+        }
+        "Invoke-PSAOAIChatCompletion" {
+            "Check the PSAOAI module installation and the deployment chat environment variable. Ensure the API key and endpoint are correctly configured."
+        }
+        "UnauthorizedAccessException" {
+            "Check the file permissions and ensure you have the necessary access rights to the file or directory."
+        }
+        "IOException" {
+            "Ensure the file path is correct and the file is not being used by another process."
+        }
+        default {
+            "Refer to the error message and stack trace for more details. Consult the official documentation or seek help from the community."
+        }
+    }
+
+    # Display the error details and suggestions
+    #Write-Host "-- Error: $($ErrorRecord.Exception.Message)"
+    Write-Host "-- Context: $ErrorContext"
+    Write-Host "-- Suggestions: $suggestions"
+    Write-Host "-- Error: $($ErrorRecord.Exception.Message)"
+
+    # Log the error details if LogFilePath is provided
+    if ($LogFilePath) {
+        $errorDetails | Out-File -FilePath $LogFilePath -Append -Force
+        if (Test-Path -Path $LogFilePath) {
+            Write-Host "Error details have been saved to the file: $LogFilePath" -ForegroundColor Yellow
+        }
+        else {
+            Write-Host "The specified log file path does not exist: $LogFilePath" -ForegroundColor Red
+        }
+    }        
+}
+
 # Function to create a new table
-function New-Table {
+function New-tdbTable {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
+        [ValidatePattern("^[a-zA-Z0-9_]+$")]  # Only allow alphanumeric and underscore
         [string]$TableName,
         [Parameter(Mandatory)]
         [string[]]$Columns
@@ -62,11 +202,11 @@ function New-Table {
         
         # Check if the table already exists
         if (Test-Path -Path $tablePath) {
-            Handle-Error -ErrorMessage "Table '$TableName' already exists."
+            Handle-tdbError -ErrorMessage "Table '$TableName' already exists."
         }
 
         # Combine default columns with user-defined columns, ensuring no duplicates
-        $allColumns = $config.DefaultColumns + ($Columns | Where-Object { $config.DefaultColumns -notcontains $_ })
+        $allColumns = $DefaultColumns + ($Columns | Where-Object { $DefaultColumns -notcontains $_ })
         $header = $allColumns -join ","
         
         # Ensure the directory exists
@@ -76,15 +216,88 @@ function New-Table {
         }
         
         $header | Out-File -FilePath $tablePath -Force
-        Write-Log -Message "Table '$TableName' created with columns: $allColumns"
+        Write-tdbLog -Message "Table '$TableName' created with columns: $allColumns"
     }
     catch {
-        Handle-Error -ErrorMessage "Error creating table '$TableName': $_"
+        Handle-tdbError -ErrorMessage "Error creating table '$TableName': $_"
     }
 }
 
+# Function to list all tables in the current database or show info for a specific table
+function Get-tdbTable {
+    [CmdletBinding()]
+    param (
+        [string]$TableName
+    )
+    try {
+        Write-Verbose "Retrieving database directory from configuration."
+        # Get the database directory from the configuration
+        $dbDir = $config.DBDirectory
+        
+        Write-Verbose "Checking if the database directory exists."
+        # Check if the database directory exists
+        if (-not (Test-Path -Path $dbDir)) {
+            Handle-tdbError -ErrorMessage "Database directory '$dbDir' does not exist."
+        }
+
+        if ($PSCmdlet.MyInvocation.BoundParameters.ContainsKey('TableName')) {
+            Write-Verbose "Retrieving information for table '$TableName'."
+            # Show info for the provided table
+            $tablePath = Join-Path -Path $dbDir -ChildPath "$TableName.csv"
+            if (-not (Test-Path -Path $tablePath)) {
+                Write-Output "Table '$TableName' does not exist."
+                #Handle-tdbError -ErrorMessage "Table '$TableName' does not exist."
+                return
+            }
+            $tableSize = (Get-Item $tablePath).Length
+            $tableInfo = [PSCustomObject]@{
+                TableName   = $TableName
+                CreatedOn   = (Get-Item $tablePath).CreationTime
+                ModifiedOn  = (Get-Item $tablePath).LastWriteTime
+                SizeInBytes = $tableSize
+            }
+            Write-Output "Table: $($tableInfo.TableName), Created On: $($tableInfo.CreatedOn), Last Modified On: $($tableInfo.ModifiedOn), Size: $($tableInfo.SizeInBytes) bytes"
+        }
+        else {
+            Write-Verbose "Retrieving list of all tables in the database."
+            # Get all CSV files in the database directory, which represent tables
+            $tables = Get-ChildItem -Path $dbDir -Filter *.csv | ForEach-Object {
+                $tablePath = $_.FullName
+                $tableSize = (Get-Item $tablePath).Length
+                [PSCustomObject]@{
+                    TableName   = $_.BaseName
+                    CreatedOn   = $_.CreationTime
+                    ModifiedOn  = $_.LastWriteTime
+                    SizeInBytes = $tableSize
+                }
+            }
+
+            # Output the list of tables or a message if no tables are found
+            if ($tables.Count -eq 0) {
+                Write-Output "No tables found in the database."
+            }
+            else {
+                Write-Output "Tables in the database:"
+                $tables | ForEach-Object { 
+                    Write-Output "Table: $($_.TableName), Created On: $($_.CreatedOn), Last Modified On: $($_.ModifiedOn), Size: $($_.SizeInBytes) bytes"
+                }
+            }
+        }
+
+        Write-Verbose "Showing context."
+        # Show context of config file path
+        Write-Output "Configuration file path: $configFilePath"
+    }
+    catch {
+        # Handle any errors that occur during the process
+        Handle-tdbError -ErrorMessage "Error retrieving tables from database: $_"
+    }
+}
+
+
+
 # Function to insert a new record
-function Insert-Record {
+function Insert-tdbRecord {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
@@ -96,7 +309,10 @@ function Insert-Record {
         Write-Verbose "Starting to insert record into table '$TableName'."
         $tablePath = Join-Path -Path $config.DBDirectory -ChildPath "$TableName.csv"
         if (-not (Test-Path -Path $tablePath)) {
-            Handle-Error -ErrorMessage "Table '$TableName' does not exist."
+            $errorMessage = "Table '$TableName' does not exist. Please ensure the table name is correct and the table has been created."
+            Write-Output $errorMessage
+            #Handle-tdbError -ErrorMessage $errorMessage
+            return
         }
 
         Write-Verbose "Reading columns from table '$TableName'."
@@ -126,7 +342,7 @@ function Insert-Record {
         $line = ($values -join ",")
         Write-Verbose "Appending new record to table '$TableName'."
         Add-Content -Path $tablePath -Value $line
-        Write-Log -Message "Inserted record into '$TableName': $Record"
+        Write-tdbLog -Message "Inserted record into '$TableName': $Record"
 
         # Update indexes if they exist
         $indexDir = Join-Path -Path $config.DBDirectory -ChildPath "Indexes"
@@ -159,7 +375,7 @@ function Insert-Record {
 
                 Write-Verbose "Exporting updated index data to file $($indexFile.FullName)."
                 $indexData | Export-Clixml -Path $indexFile.FullName -Force
-                Write-Log -Message "Index '$($indexFile.BaseName)' updated with new record."
+                Write-tdbLog -Message "Index '$($indexFile.BaseName)' updated with new record."
             }
             else {
                 Write-Verbose "Index file $($indexFile.Name) does not match table $TableName. Skipping."
@@ -168,12 +384,12 @@ function Insert-Record {
         Write-Verbose "Finished inserting record into table '$TableName'."
     }
     catch {
-        Handle-Error -ErrorMessage "Error inserting record into '$TableName': $_"
+        Handle-tdbError -ErrorMessage "Error inserting record into '$TableName': $_"
     }
 }
 
 # Function to read records
-function Get-Records {
+function Get-tdbRecord {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
@@ -188,14 +404,14 @@ function Get-Records {
         [string]$ComparisonOperator = 'equals'
     )
     try {
-        Write-Verbose "Starting Get-Records for table '$TableName' with filter and logical operator '$LogicalOperator'."
+        Write-Verbose "Starting Get-tdbRecord for table '$TableName' with filter and logical operator '$LogicalOperator'."
         Write-Debug "Parameters: TableName=$TableName, Filter=$($Filter | Out-String), LogicalOperator=$LogicalOperator, ComparisonOperator=$ComparisonOperator"
         
         $tablePath = Join-Path -Path $config.DBDirectory -ChildPath "$TableName.csv"
         Write-Debug "Table path: $tablePath"
         
         if (-not (Test-Path -Path $tablePath)) {
-            Handle-Error -ErrorMessage "Table '$TableName' does not exist."
+            Handle-tdbError -ErrorMessage "Table '$TableName' does not exist."
         }
 
         $indexDir = Join-Path -Path $config.DBDirectory -ChildPath "Indexes"
@@ -286,7 +502,8 @@ function Get-Records {
                                 if ($record.PSObject.Properties.Match($key)) {
                                     Write-Verbose "Comparing property '$key' '$record' with value '$value'"
                                     $record.$key -eq $value
-                                } else {
+                                }
+                                else {
                                     Write-Verbose "Property '$key' not found in the data"
                                     $false
                                 }
@@ -311,16 +528,16 @@ function Get-Records {
                 }
             }
         }
-        Write-Verbose "Finished Get-Records for table '$TableName'."
+        Write-Verbose "Finished Get-tdbRecord for table '$TableName'."
         Write-Debug "Final data: $($data | Out-String)"
         return $data
     }
     catch {
-        Handle-Error -ErrorMessage "Error reading records from '$TableName' '$tablePath': $_"
+        Handle-tdbError -ErrorMessage "Error reading records from '$TableName' '$tablePath': $_"
     }
 }
 # Function to update records
-function Update-Records {
+function Update-tdbRecords {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
@@ -333,7 +550,7 @@ function Update-Records {
     try {
         $tablePath = Join-Path -Path $config.DBDirectory -ChildPath "$TableName.csv"
         if (-not (Test-Path -Path $tablePath)) {
-            Handle-Error -ErrorMessage "Table '$TableName' does not exist."
+            Handle-tdbError -ErrorMessage "Table '$TableName' does not exist."
         }
 
         $data = Import-Csv -Path $tablePath
@@ -358,19 +575,19 @@ function Update-Records {
 
         if ($updated) {
             $data | Export-Csv -Path $tablePath -NoTypeInformation
-            Write-Log -Message "Updated records in '$TableName' where $Filter with $NewValues"
+            Write-tdbLog -Message "Updated records in '$TableName' where $Filter with $NewValues"
         }
         else {
-            Handle-Error -ErrorMessage "No matching records found to update in '$TableName'."
+            Handle-tdbError -ErrorMessage "No matching records found to update in '$TableName'."
         }
     }
     catch {
-        Handle-Error -ErrorMessage "Error updating records in '$TableName': $_"
+        Handle-tdbError -ErrorMessage "Error updating records in '$TableName': $_"
     }
 }
 
 # Function to delete records
-function Remove-Records {
+function Remove-tdbRecords {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
@@ -381,7 +598,7 @@ function Remove-Records {
     try {
         $tablePath = Join-Path -Path $config.DBDirectory -ChildPath "$TableName.csv"
         if (-not (Test-Path -Path $tablePath)) {
-            Handle-Error -ErrorMessage "Table '$TableName' does not exist."
+            Handle-tdbError -ErrorMessage "Table '$TableName' does not exist."
         }
 
         $data = Import-Csv -Path $tablePath
@@ -400,24 +617,26 @@ function Remove-Records {
 
         if ($data.Count -lt $originalCount) {
             $data | Export-Csv -Path $tablePath -NoTypeInformation
-            Write-Log -Message "Deleted records from '$TableName' where $Filter"
+            Write-tdbLog -Message "Deleted records from '$TableName' where $Filter"
         }
         else {
-            Handle-Error -ErrorMessage "No matching records found to delete in '$TableName'."
+            Handle-tdbError -ErrorMessage "No matching records found to delete in '$TableName'."
         }
     }
     catch {
-        Handle-Error -ErrorMessage "Error deleting records from '$TableName': $_"
+        Handle-tdbError -ErrorMessage "Error deleting records from '$TableName': $_"
     }
 }
 
 # Function to create an index
-function New-DBMSIndex {
+function New-tdbDBMSIndex {
     param (
         [string]$TableName,
         [string]$ColumnName,
         [string]$IndexName
     )
+
+    Write-Warning "The indexing feature is experimental and may not work as expected."
 
     # Ensure the index directory exists
     $indexDir = Join-Path -Path $config.DBDirectory -ChildPath "Indexes"
@@ -428,7 +647,7 @@ function New-DBMSIndex {
     # Check if index already exists
     $indexPath = Join-Path -Path $indexDir -ChildPath "$IndexName.index"
     if (Test-Path $indexPath) {
-        Handle-Error -ErrorMessage "Index '$IndexName' already exists."
+        Handle-tdbError -ErrorMessage "Index '$IndexName' already exists."
     }
 
     # Create index file and write metadata
@@ -440,11 +659,14 @@ function New-DBMSIndex {
     }
     $metadata | Export-Clixml -Path $indexPath
 
-    Write-Log -Message "Index '$IndexName' created successfully."
+    Write-tdbLog -Message "Index '$IndexName' created successfully."
 }
 
 # Function to list all indexes
-function Get-DBMSIndexes {
+function Get-tdbIndexes {
+
+    Write-Warning "The indexing feature is experimental and may not work as expected."
+
     $indexDir = Join-Path -Path $config.DBDirectory -ChildPath "Indexes"
     Get-ChildItem -Path $indexDir -Filter *.index | ForEach-Object {
         [PSCustomObject]@{
@@ -455,28 +677,32 @@ function Get-DBMSIndexes {
 }
 
 # Function to delete an index
-function Remove-DBMSIndex {
+function Remove-tdbIndex {
     param (
         [string]$IndexName
     )
+
+    Write-Warning "The indexing feature is experimental and may not work as expected."
 
     $indexDir = Join-Path -Path $config.DBDirectory -ChildPath "Indexes"
     $indexPath = Join-Path -Path $indexDir -ChildPath "$IndexName.index"
     
     if (Test-Path $indexPath) {
         Remove-Item -Path $indexPath -Force
-        Write-Log -Message "Index '$IndexName' deleted successfully."
+        Write-tdbLog -Message "Index '$IndexName' deleted successfully."
     }
     else {
-        Handle-Error -ErrorMessage "Index '$IndexName' does not exist."
+        Handle-tdbError -ErrorMessage "Index '$IndexName' does not exist."
     }
 }
 
-function Reindex-DBMSIndex {
+function Reindex-tdbIndex {
     param (
         [Parameter(Mandatory = $true)]
         [string]$IndexName
     )
+
+    Write-Warning "The indexing feature is experimental and may not work as expected."
 
     try {
         Write-Verbose "Starting reindexing process for index '$IndexName'."
@@ -487,7 +713,7 @@ function Reindex-DBMSIndex {
         Write-Debug "Index path: $indexPath"
         
         if (-not (Test-Path $indexPath)) {
-            Handle-Error -ErrorMessage "Index '$IndexName' does not exist."
+            Handle-tdbError -ErrorMessage "Index '$IndexName' does not exist."
             return
         }
 
@@ -498,7 +724,7 @@ function Reindex-DBMSIndex {
 
         # Validate metadata
         if (-not $metadata.TableName -or -not $metadata.ColumnName) {
-            Handle-Error -ErrorMessage "Invalid metadata for index '$IndexName'."
+            Handle-tdbError -ErrorMessage "Invalid metadata for index '$IndexName'."
             return
         }
 
@@ -506,7 +732,7 @@ function Reindex-DBMSIndex {
         $tablePath = Join-Path -Path $config.DBDirectory -ChildPath "$($metadata.TableName).csv"
         Write-Debug "Table path: $tablePath"
         if (-not (Test-Path $tablePath)) {
-            Handle-Error -ErrorMessage "Table '$($metadata.TableName)' does not exist."
+            Handle-tdbError -ErrorMessage "Table '$($metadata.TableName)' does not exist."
             return
         }
         Write-Verbose "Loading table data from '$tablePath'."
@@ -531,17 +757,17 @@ function Reindex-DBMSIndex {
         Write-Verbose "Saving the new index to '$indexPath'."
         $indexData | Export-Clixml -Path $indexPath -Force
 
-        Write-Log -Message "Index '$IndexName' reindexed successfully based on table data."
+        Write-tdbLog -Message "Index '$IndexName' reindexed successfully based on table data."
         Write-Verbose "Reindexing process for index '$IndexName' completed successfully."
     }
     catch {
-        Handle-Error -ErrorMessage "Error reindexing '$IndexName': $_"
+        Handle-tdbError -ErrorMessage "Error reindexing '$IndexName': $_"
     }
 }
 
 
 # Function to validate data types
-function Validate-DataType {
+function Validate-tdbDataType {
     param (
         [Parameter(Mandatory = $true)]
         [PSCustomObject] $Record,
@@ -560,7 +786,7 @@ function Validate-DataType {
 }
 
 # Function to validate required fields
-function Validate-RequiredFields {
+function Validate-tdbRequiredFields {
     param (
         [Parameter(Mandatory = $true)]
         [PSCustomObject] $Record,
@@ -575,7 +801,7 @@ function Validate-RequiredFields {
 }
 
 # Function to validate unique constraints
-function Validate-UniqueConstraints {
+function Validate-tdbUniqueConstraints {
     param (
         [Parameter(Mandatory = $true)]
         [PSCustomObject] $Record,
@@ -594,32 +820,54 @@ function Validate-UniqueConstraints {
 }
 
 # Sample usage guide
-function Show-Usage {
+function Show-tdbUsage {
     Write-Output "Usage Guide for Miniature Text Relational DBMS"
     Write-Output "---------------------------------------------"
-    Write-Output "1. Creating a new table: New-Table -TableName 'Users' -Columns @('ID', 'Name', 'Email')"
-    Write-Output "2. Inserting a record: Insert-Record -TableName 'Users' -Record @{ID=1; Name='John Doe'; Email='john@example.com'}"
-    Write-Output "3. Reading records: Get-Records -TableName 'Users' -Filter @{Name='John Doe'} -LogicalOperator 'equals'"
-    Write-Output "4. Updating records: Update-Records -TableName 'Users' -Filter @{ID=1} -NewValues @{Email='john.doe@example.com'}"
-    Write-Output "5. Deleting records: Remove-Records -TableName 'Users' -Filter @{ID=1}"
-    Write-Output "6. Creating an index: New-DBMSIndex -TableName 'Users' -ColumnName 'Name' -IndexName 'NameIndex'"
-    Write-Output "7. Listing indexes: Get-DBMSIndexes"
-    Write-Output "8. Deleting an index: Remove-DBMSIndex -IndexName 'NameIndex'"
-    Write-Output "9. Configuration file example: Use the following structure for configuration settings:"
-    Write-Output "[PSCustomObject]@{"
-    Write-Output "    LogFilePath = 'C:\Logs\ScriptLog.txt'"
-    Write-Output "    DBDirectory = 'C:\DB'"
-    Write-Output "    IndexDirectory = 'C:\DB\Indexes'"
-    Write-Output "    DefaultColumns = @('ID', 'CreationTime')"
-    Write-Output "}"
-    Write-Output "10. Troubleshooting Tips: Check the log file at $config.LogFilePath for detailed error messages if any operation fails."
+    Write-Output "1. Creating a new table: New-tdbTable -TableName 'Users' -Columns @('Name', 'Email')"
+    Write-Output "2. Inserting a record: Insert-tdbRecord -TableName 'Users' -Record @{Name='John Doe'; Email='john@example.com'}"
+    Write-Output "3. Reading records: Get-tdbRecord -TableName 'Users' -Filter @{Name='John Doe'} -LogicalOperator equals"
+    Write-Output "4. Getting table information: Get-tdbTable -TableName 'Users'"
+    Write-Output "5. Updating records: Update-tdbRecords -TableName 'Users' -Filter @{ID=1} -NewValues @{Email='john.doe@example.com'}"
+    Write-Output "6. Deleting records: Remove-tdbRecords -TableName 'Users' -Filter @{ID=1}"
+    Write-Output "7. Troubleshooting Tips: Check the log file at `$config.LogFilePath for detailed error messages if any operation fails."
 }
 
 # Main function to drive the program
-function Main {
-    Show-Usage
+function Main-tdb {
+    # Display the banner
+    Show-Banner
+    
+    Write-Output "To display the usage guide at any time, run the cmdlet: Show-tdbUsage"
+    
+    # Check for script updates
+    Get-CheckForScriptUpdate -currentScriptVersion $tdbVersion -scriptName $scriptname
+    
+    try {
+        # Configuration Section
+        # Determine the path to the configuration file
+        $configFilePath = Join-Path -Path (Split-Path -Parent $MyInvocation.MyCommand.Path) -ChildPath ".tdb.config"
+    
+        if (-not (Test-Path -Path $configFilePath -PathType Leaf)) {
+            # If the config file does not exist, create a default configuration
+            $config = @{
+                LogFilePath    = "$env:USERPROFILE\Documents\PSTextDBMS\Logs\tdb.Log"  # Path to the log file
+                DBDirectory    = "$env:USERPROFILE\Documents\PSTextDBMS\DB"            # Path to the database directory
+                IndexDirectory = "$env:USERPROFILE\Documents\PSTextDBMS\DB\Indexes"    # Path to the index directory
+            }
+            # Create config file with default settings
+            $config | ConvertTo-Json | Set-Content -Path $configFilePath
+        }
+        else {
+            # If the config file exists, load the configuration from the file
+            $config = Get-Content -Path $configFilePath | ConvertFrom-Json
+        }        
+    }
+    catch [System.Exception] {
+        # Handle any exceptions that occur during the configuration process
+        $functionName = $MyInvocation.MyCommand.Name
+        Update-ErrorHandling -ErrorRecord $_ -ErrorContext "$functionName function" -LogFilePath $config.LogFilePath  
+    }
 }
 
 # Entry point
-Main
-
+Main-tdb
