@@ -4,9 +4,10 @@
 .AUTHOR voytas75
 .TAGS text database, database, simple, minimal
 .PROJECTURI https://github.com/voytas75/tdb
+.ICONURI https://raw.githubusercontent.com/voytas75/tdb/master/images/tdb.png
 .EXTERNALMODULEDEPENDENCIES
 .RELEASENOTES
-1.0.5 [unpublished]: 
+1.0.5: add iconURI.
 1.0.4: change function names, fixes in Insert and Update record.
 1.0.3: added listing tables.
 1.0.2: Improved modularity, added centralized error handling and logging. Enhanced documentation with detailed help blocks and a comprehensive usage guide. Included unit tests for all critical functions and ensured compatibility with different environments.
