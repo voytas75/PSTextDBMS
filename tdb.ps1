@@ -2,14 +2,15 @@
 .VERSION 1.0.3
 .GUID 4ee202bc-b16f-46b4-a15b-72ae9f4ae177
 .AUTHOR voytas75
-.TAGS ai,psaoai,llm,project,team,gpt
+.TAGS text database, database, simple, minimal
 .PROJECTURI https://github.com/voytas75/tdb
 .EXTERNALMODULEDEPENDENCIES
 .RELEASENOTES
-1.0.3[unpublished]: added listing tables.
+1.0.3: added listing tables.
 1.0.2: Improved modularity, added centralized error handling and logging. Enhanced documentation with detailed help blocks and a comprehensive usage guide. Included unit tests for all critical functions and ensured compatibility with different environments.
 1.0.1: initializing.
 #>
+
 <#
 .SYNOPSIS
 Simple Miniature Text Relational Database Management System (TDB)
@@ -18,21 +19,27 @@ Simple Miniature Text Relational Database Management System (TDB)
 This PowerShell script implements a simple text-based relational DBMS. It supports CRUD operations, search functionality, indexing, and data integrity checks.
 The script is designed to be clean, efficient, and functional, adhering to best practices.
 
-.NOTES
-Version 1.4.0: Improved modularity, added centralized error handling and logging. Enhanced documentation with detailed help blocks and a comprehensive usage guide. Included unit tests for all critical functions and ensured compatibility with different environments.
-
+.PARAMETER configFilePath
+Specifies the path to the configuration file. If not provided, the script will attempt to load the default configuration file from the script's directory.
 #>
 
+param (
+    [Parameter(Mandatory = $false)]
+    [string]$configFilePath
+)
+
+#region Script Metadata
 # Define the current version of the script
 $tdbVersion = "1.0.3"
 
-# Define the name of the script
-$scriptname = "tdb"
+# Get the script name from the invocation without the extension
+$scriptname = [System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath)
 
 # Default columns setting (system application setting)
 $DefaultColumns = @("ID", "CreationTime")
+#endregion Script Metadata
 
-
+#region Functions
 function Get-LatestVersion {
     param (
         [Parameter(Mandatory = $true)]
@@ -48,8 +55,9 @@ function Get-LatestVersion {
     }
     catch [System.Exception] {
         $functionName = $MyInvocation.MyCommand.Name
+        #Write-Warning "Error occurred while trying to find the script '$scriptName' on PowerShell Gallery."
         Update-ErrorHandling -ErrorRecord $_ -ErrorContext "$functionName function" -LogFilePath $config.LogFilePath  
-        return $null
+        return
     }
 }
 
@@ -71,9 +79,9 @@ function Get-CheckForScriptUpdate {
                 write-Host "`n`n"
             } 
         }
-        else {
-            Write-Warning "Failed to check for the latest version of the script."
-        }
+        #else {
+        #    Write-Warning "Failed to check for the latest version of the script."
+        #}
     }
     catch [System.Exception] {
         $functionName = $MyInvocation.MyCommand.Name
@@ -85,8 +93,8 @@ function Get-CheckForScriptUpdate {
 function Show-Banner {
     Write-Host @'
 
-   _______________________/\\\___/\\\________        
-    ______________________\/\\\__\/\\\________       
+   __powershell___________/\\\___/\\\________        
+    ___voytas75___________\/\\\__\/\\\________       
      _____/\\\_____________\/\\\__\/\\\________      
       __/\\\\\\\\\\\________\/\\\__\/\\\________     
        _\////\\\////____/\\\\\\\\\__\/\\\\\\\\\__    
@@ -95,7 +103,7 @@ function Show-Banner {
           ____\//\\\\\___\//\\\\\\\/\\_\/\\\\\\\\\__ 
            _____\/////_____\///////\//__\/////////___
    
-           powershell [t]ext [d]ata [b]ase
+           powershell [t]ext [d]ata[b]ase
            https://github.com/voytas75/tdb
 
 
@@ -152,11 +160,26 @@ function Update-ErrorHandling {
 
     # Provide suggestions based on the error type
     $suggestions = switch -Regex ($ErrorMessage) {
-        "PSScriptAnalyzer" {
-            "Ensure the PSScriptAnalyzer module is installed and up-to-date. Use 'Install-Module -Name PSScriptAnalyzer' or 'Update-Module -Name PSScriptAnalyzer'."
+        "Get-tdbRecord" {
+            "Check the table name and ensure it exists. Verify the filter and logical operator parameters."
         }
-        "Invoke-PSAOAIChatCompletion" {
-            "Check the PSAOAI module installation and the deployment chat environment variable. Ensure the API key and endpoint are correctly configured."
+        "New-tdbTable" {
+            "Ensure the table name is unique and follows the naming conventions. Verify the columns provided."
+        }
+        "Insert-tdbRecord" {
+            "Check if the table exists and the record format is correct. Ensure the ID field is not manually set."
+        }
+        "Update-tdbRecords" {
+            "Verify the table name, filter criteria, and new values. Ensure the table exists and the filter matches records."
+        }
+        "Remove-tdbRecords" {
+            "Ensure the table exists and the filter criteria are correct. Verify that matching records exist."
+        }
+        "New-tdbIndex" {
+            "Check if the index name is unique and the table and column names are correct. Ensure the table exists."
+        }
+        "Reindex-tdbIndex" {
+            "Verify the index name and ensure it exists. Check the table and column names in the index metadata."
         }
         "UnauthorizedAccessException" {
             "Check the file permissions and ensure you have the necessary access rights to the file or directory."
@@ -171,18 +194,18 @@ function Update-ErrorHandling {
 
     # Display the error details and suggestions
     #Write-Host "-- Error: $($ErrorRecord.Exception.Message)"
+    Write-Host "-- Error: $($ErrorRecord.Exception.Message)"
     Write-Host "-- Context: $ErrorContext"
     Write-Host "-- Suggestions: $suggestions"
-    Write-Host "-- Error: $($ErrorRecord.Exception.Message)"
 
     # Log the error details if LogFilePath is provided
     if ($LogFilePath) {
         $errorDetails | Out-File -FilePath $LogFilePath -Append -Force
         if (Test-Path -Path $LogFilePath) {
-            Write-Host "Error details have been saved to the file: $LogFilePath" -ForegroundColor Yellow
+            Write-Host ">> Error details have been saved to the file: $LogFilePath" -ForegroundColor Yellow
         }
         else {
-            Write-Host "The specified log file path does not exist: $LogFilePath" -ForegroundColor Red
+            Write-Host "-- The specified log file path does not exist: $LogFilePath" -ForegroundColor Red
         }
     }        
 }
@@ -219,7 +242,8 @@ function New-tdbTable {
         Write-tdbLog -Message "Table '$TableName' created with columns: $allColumns"
     }
     catch {
-        Handle-tdbError -ErrorMessage "Error creating table '$TableName': $_"
+        $functionName = $MyInvocation.MyCommand.Name
+        Update-ErrorHandling -ErrorRecord $_ -ErrorContext "$functionName function; Error creating table '$TableName'" -LogFilePath $config.LogFilePath  
     }
 }
 
@@ -290,7 +314,8 @@ function Get-tdbTable {
     }
     catch {
         # Handle any errors that occur during the process
-        Handle-tdbError -ErrorMessage "Error retrieving tables from database: $_"
+        $functionName = $MyInvocation.MyCommand.Name
+        Update-ErrorHandling -ErrorRecord $_ -ErrorContext "$functionName function; Error retrieving tables from database" -LogFilePath $config.LogFilePath  
     }
 }
 
@@ -384,7 +409,8 @@ function Insert-tdbRecord {
         Write-Verbose "Finished inserting record into table '$TableName'."
     }
     catch {
-        Handle-tdbError -ErrorMessage "Error inserting record into '$TableName': $_"
+        $functionName = $MyInvocation.MyCommand.Name
+        Update-ErrorHandling -ErrorRecord $_ -ErrorContext "$functionName function; Error inserting record into '$TableName'" -LogFilePath $config.LogFilePath  
     }
 }
 
@@ -533,7 +559,8 @@ function Get-tdbRecord {
         return $data
     }
     catch {
-        Handle-tdbError -ErrorMessage "Error reading records from '$TableName' '$tablePath': $_"
+        $functionName = $MyInvocation.MyCommand.Name
+        Update-ErrorHandling -ErrorRecord $_ -ErrorContext "$functionName function; Error reading records from '$TableName' '$tablePath'" -LogFilePath $config.LogFilePath  
     }
 }
 # Function to update records
@@ -582,7 +609,8 @@ function Update-tdbRecords {
         }
     }
     catch {
-        Handle-tdbError -ErrorMessage "Error updating records in '$TableName': $_"
+        $functionName = $MyInvocation.MyCommand.Name
+        Update-ErrorHandling -ErrorRecord $_ -ErrorContext "$functionName function; Error updating records in '$TableName'" -LogFilePath $config.LogFilePath  
     }
 }
 
@@ -624,12 +652,13 @@ function Remove-tdbRecords {
         }
     }
     catch {
-        Handle-tdbError -ErrorMessage "Error deleting records from '$TableName': $_"
+        $functionName = $MyInvocation.MyCommand.Name
+        Update-ErrorHandling -ErrorRecord $_ -ErrorContext "$functionName function; Error deleting records from '$TableName'" -LogFilePath $config.LogFilePath  
     }
 }
 
 # Function to create an index
-function New-tdbDBMSIndex {
+function New-tdbIndex {
     param (
         [string]$TableName,
         [string]$ColumnName,
@@ -692,7 +721,8 @@ function Remove-tdbIndex {
         Write-tdbLog -Message "Index '$IndexName' deleted successfully."
     }
     else {
-        Handle-tdbError -ErrorMessage "Index '$IndexName' does not exist."
+        $functionName = $MyInvocation.MyCommand.Name
+        Update-ErrorHandling -ErrorRecord $_ -ErrorContext "$functionName function; Index '$IndexName' does not exist." -LogFilePath $config.LogFilePath  
     }
 }
 
@@ -761,7 +791,8 @@ function Reindex-tdbIndex {
         Write-Verbose "Reindexing process for index '$IndexName' completed successfully."
     }
     catch {
-        Handle-tdbError -ErrorMessage "Error reindexing '$IndexName': $_"
+        $functionName = $MyInvocation.MyCommand.Name
+        Update-ErrorHandling -ErrorRecord $_ -ErrorContext "$functionName function; Error reindexing '$IndexName'" -LogFilePath $config.LogFilePath  
     }
 }
 
@@ -821,7 +852,7 @@ function Validate-tdbUniqueConstraints {
 
 # Sample usage guide
 function Show-tdbUsage {
-    Write-Output "Usage Guide for Miniature Text Relational DBMS"
+    Write-Output "Usage Guide for Miniature Text Relational DBMS (tdb)"
     Write-Output "---------------------------------------------"
     Write-Output "1. Creating a new table: New-tdbTable -TableName 'Users' -Columns @('Name', 'Email')"
     Write-Output "2. Inserting a record: Insert-tdbRecord -TableName 'Users' -Record @{Name='John Doe'; Email='john@example.com'}"
@@ -831,43 +862,61 @@ function Show-tdbUsage {
     Write-Output "6. Deleting records: Remove-tdbRecords -TableName 'Users' -Filter @{ID=1}"
     Write-Output "7. Troubleshooting Tips: Check the log file at `$config.LogFilePath for detailed error messages if any operation fails."
 }
+#endregion Functions
 
-# Main function to drive the program
-function Main-tdb {
-    # Display the banner
-    Show-Banner
+
+#region Entry Point
+# Display the banner
+Show-Banner
     
-    Write-Output "To display the usage guide at any time, run the cmdlet: Show-tdbUsage"
+# Inform the user how to display the usage guide
+Write-Output "To display the usage guide at any time, run the cmdlet: Show-tdbUsage"
     
-    # Check for script updates
-    Get-CheckForScriptUpdate -currentScriptVersion $tdbVersion -scriptName $scriptname
-    
-    try {
-        # Configuration Section
-        # Determine the path to the configuration file
-        $configFilePath = Join-Path -Path (Split-Path -Parent $MyInvocation.MyCommand.Path) -ChildPath ".tdb.config"
-    
-        if (-not (Test-Path -Path $configFilePath -PathType Leaf)) {
-            # If the config file does not exist, create a default configuration
+try {
+    # Configuration Section
+    if ($PSCmdlet.MyInvocation.BoundParameters.ContainsKey('configFilePath') -and (Test-Path -Path $configFilePath -PathType Leaf)) {
+        Write-Verbose "User provided configuration file path: $configFilePath. Loading configuration."
+        # Load the configuration from the provided file
+        $configFilePath = (Resolve-Path -Path $configFilePath).Path
+        $config = Get-Content -Path $configFilePath | ConvertFrom-Json
+        Write-Host "Configuration loaded successfully from user-provided path: $configFilePath"
+    }
+    else {
+        # Determine the path to the default configuration file
+        $Invocation = (Get-Variable MyInvocation).Value
+        Write-Verbose "Determining the parent path of the current script."
+        $parentPath = Split-Path -Parent $Invocation.MyCommand.Path
+        Write-Verbose "Parent path determined: $parentPath"
+        Write-Verbose "Joining the parent path with the default configuration file name."
+        $ConfigFilePath = Join-Path -Path $parentPath -ChildPath ".tdb_default.config"
+        Write-Host "Default configuration loaded successfully from path: $ConfigFilePath"
+        
+        if (-not (Test-Path -Path $ConfigFilePath -PathType Leaf)) {
+            Write-Verbose "Default configuration file not found. Creating default configuration."
+            # If the default config file does not exist, create a default configuration
             $config = @{
-                LogFilePath    = "$env:USERPROFILE\Documents\PSTextDBMS\Logs\tdb.Log"  # Path to the log file
-                DBDirectory    = "$env:USERPROFILE\Documents\PSTextDBMS\DB"            # Path to the database directory
-                IndexDirectory = "$env:USERPROFILE\Documents\PSTextDBMS\DB\Indexes"    # Path to the index directory
+                LogFilePath    = "$env:USERPROFILE\Documents\$scriptname\Logs\tdb.Log"  # Path to the log file
+                DBDirectory    = "$env:USERPROFILE\Documents\$scriptname\DB"            # Path to the database directory
+                IndexDirectory = "$env:USERPROFILE\Documents\$scriptname\DB\Indexes"    # Path to the index directory
             }
-            # Create config file with default settings
-            $config | ConvertTo-Json | Set-Content -Path $configFilePath
+            # Create default config file with default settings
+            $config | ConvertTo-Json | Set-Content -Path $defaultConfigFilePath
+            Write-Verbose "Default configuration file created at: $defaultConfigFilePath"
         }
         else {
-            # If the config file exists, load the configuration from the file
-            $config = Get-Content -Path $configFilePath | ConvertFrom-Json
-        }        
+            Write-Verbose "Default configuration file found. Loading configuration."
+            # If the default config file exists, load the configuration from the file
+            $config = Get-Content -Path $defaultConfigFilePath | ConvertFrom-Json
+            Write-Verbose "Configuration loaded successfully from default path."
+        }
     }
-    catch [System.Exception] {
-        # Handle any exceptions that occur during the configuration process
-        $functionName = $MyInvocation.MyCommand.Name
-        Update-ErrorHandling -ErrorRecord $_ -ErrorContext "$functionName function" -LogFilePath $config.LogFilePath  
-    }
-}
+    # Check for script updates
+    Get-CheckForScriptUpdate -currentScriptVersion $tdbVersion -scriptName $scriptname
 
-# Entry point
-Main-tdb
+}
+catch [System.Exception] {
+    # Handle any exceptions that occur during the configuration process
+    $functionName = $MyInvocation.MyCommand.Name
+    Update-ErrorHandling -ErrorRecord $_ -ErrorContext "$functionName function" -LogFilePath $config.LogFilePath  
+}
+#endregion Entry Point
