@@ -1,11 +1,12 @@
 <#PSScriptInfo
-.VERSION 1.0.4
+.VERSION 1.0.5
 .GUID 4ee202bc-b16f-46b4-a15b-72ae9f4ae177
 .AUTHOR voytas75
 .TAGS text database, database, simple, minimal
 .PROJECTURI https://github.com/voytas75/tdb
 .EXTERNALMODULEDEPENDENCIES
 .RELEASENOTES
+1.0.5 [unpublished]: 
 1.0.4: change function names, fixes in Insert and Update record.
 1.0.3: added listing tables.
 1.0.2: Improved modularity, added centralized error handling and logging. Enhanced documentation with detailed help blocks and a comprehensive usage guide. Included unit tests for all critical functions and ensured compatibility with different environments.
@@ -31,7 +32,7 @@ param (
 
 #region Script Metadata
 # Define the current version of the script
-$tdbVersion = "1.0.4"
+$tdbVersion = "1.0.5"
 
 # Get the script name from the invocation without the extension
 $scriptname = [System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath)
