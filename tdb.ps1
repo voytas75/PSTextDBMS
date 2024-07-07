@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.0.5
+.VERSION 1.0.6
 .GUID 4ee202bc-b16f-46b4-a15b-72ae9f4ae177
 .AUTHOR voytas75
 .TAGS text database, database, simple, minimal
@@ -7,6 +7,7 @@
 .ICONURI https://raw.githubusercontent.com/voytas75/tdb/master/images/tdb.png
 .EXTERNALMODULEDEPENDENCIES
 .RELEASENOTES
+1.0.6[unpublished]: add support info
 1.0.5: add iconURI.
 1.0.4: change function names, fixes in Insert and Update record.
 1.0.3: added listing tables.
@@ -33,7 +34,7 @@ param (
 
 #region Script Metadata
 # Define the current version of the script
-$tdbVersion = "1.0.5"
+$tdbVersion = "1.0.6"
 
 # Get the script name from the invocation without the extension
 $scriptname = [System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath)
@@ -864,6 +865,8 @@ function Show-tdbUsage {
     Write-Output "5. Updating records: Update-tdbRecord -TableName 'Users' -Filter @{ID=1} -NewValues @{Email='john.doe@example.com'}"
     Write-Output "6. Deleting records: Remove-tdbRecord -TableName 'Users' -Filter @{ID=1}"
     Write-Output "7. Troubleshooting Tips: Check the log file at `$config.LogFilePath for detailed error messages if any operation fails."
+    # Add a short description for Ko-fi support
+    Write-Output "`n`nSupport the development of tdb on Ko-fi: https://ko-fi.com/A0A6KYBUS`n`n"
 }
 #endregion Functions
 
