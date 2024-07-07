@@ -6,7 +6,7 @@
 .PROJECTURI https://github.com/voytas75/tdb
 .EXTERNALMODULEDEPENDENCIES
 .RELEASENOTES
-1.0.4[unpublished]: 
+1.0.4: change function names, fixes in Insert and Update record.
 1.0.3: added listing tables.
 1.0.2: Improved modularity, added centralized error handling and logging. Enhanced documentation with detailed help blocks and a comprehensive usage guide. Included unit tests for all critical functions and ensured compatibility with different environments.
 1.0.1: initializing.
@@ -170,10 +170,10 @@ function Update-ErrorHandling {
         "Insert-tdbRecord" {
             "Check if the table exists and the record format is correct. Ensure the ID field is not manually set."
         }
-        "Update-tdbRecords" {
+        "Update-tdbRecord" {
             "Verify the table name, filter criteria, and new values. Ensure the table exists and the filter matches records."
         }
-        "Remove-tdbRecords" {
+        "Remove-tdbRecord" {
             "Ensure the table exists and the filter criteria are correct. Verify that matching records exist."
         }
         "New-tdbIndex" {
@@ -372,7 +372,7 @@ function Insert-tdbRecord {
 
         # Update indexes if they exist
         $indexDir = Join-Path -Path $config.DBDirectory -ChildPath "Indexes"
-        $indexFiles = Get-ChildItem -Path $indexDir -Filter "*.index"
+        $indexFiles = Get-ChildItem -Path $indexDir -Filter "*.index" -ErrorAction SilentlyContinue
 
         foreach ($indexFile in $indexFiles) {
             Write-Verbose "Checking index file: $($indexFile.Name)"
@@ -444,7 +444,7 @@ function Get-tdbRecord {
         $indexDir = Join-Path -Path $config.DBDirectory -ChildPath "Indexes"
         Write-Debug "Index directory: $indexDir"
         
-        $indexFiles = Get-ChildItem -Path $indexDir -Filter "*.index"
+        $indexFiles = Get-ChildItem -Path $indexDir -Filter "*.index" -ErrorAction SilentlyContinue
         Write-Debug "Index files found: $($indexFiles | Out-String)"
         
         $indexUsed = $false
@@ -454,7 +454,6 @@ function Get-tdbRecord {
             Write-Debug "Checking index file: $($indexFile.FullName)"
             Write-Debug "Checking if index file matches table and filter keys: TableName=$($indexData.TableName), FilterKeys=$($Filter.Keys)"
             Write-Debug "Index data: $($indexData | Out-String)"
-            $indexData.TableName -eq $TableName -and $Filter.Keys -contains $indexData.ColumnName
             if ($indexData.TableName -eq $TableName -and $Filter.Keys -contains $indexData.ColumnName) {
                 $indexPath = $indexFile.FullName
                 $indexUsed = $true
@@ -463,7 +462,7 @@ function Get-tdbRecord {
             }
         }
 
-        if (Test-Path -Path $indexPath) {
+        if ($indexUsed -and (Test-Path -Path $indexPath)) {
             Write-Verbose "Using index file: $indexPath"
             $indexData = Import-Clixml -Path $indexPath
             Write-Debug "Index data imported: $($indexData | Out-String)"
@@ -501,10 +500,8 @@ function Get-tdbRecord {
                 Write-Debug "Result for record: $result"
                 return $result
             }
-            $indexUsed = $true
         }
-
-        if (-not $indexUsed) {
+        else {
             Write-Verbose "No suitable index found. Performing full table scan."
             $data = Import-Csv -Path $tablePath
             Write-Verbose "Data imported from $tablePath"
@@ -564,8 +561,9 @@ function Get-tdbRecord {
         Update-ErrorHandling -ErrorRecord $_ -ErrorContext "$functionName function; Error reading records from '$TableName' '$tablePath'" -LogFilePath $config.LogFilePath  
     }
 }
+
 # Function to update records
-function Update-tdbRecords {
+function Update-tdbRecord {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
@@ -604,6 +602,7 @@ function Update-tdbRecords {
         if ($updated) {
             $data | Export-Csv -Path $tablePath -NoTypeInformation
             Write-tdbLog -Message "Updated records in '$TableName' where $Filter with $NewValues"
+            return $true
         }
         else {
             Handle-tdbError -ErrorMessage "No matching records found to update in '$TableName'."
@@ -616,7 +615,7 @@ function Update-tdbRecords {
 }
 
 # Function to delete records
-function Remove-tdbRecords {
+function Remove-tdbRecord {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
@@ -647,6 +646,7 @@ function Remove-tdbRecords {
         if ($data.Count -lt $originalCount) {
             $data | Export-Csv -Path $tablePath -NoTypeInformation
             Write-tdbLog -Message "Deleted records from '$TableName' where $Filter"
+            return $true
         }
         else {
             Handle-tdbError -ErrorMessage "No matching records found to delete in '$TableName'."
@@ -693,7 +693,7 @@ function New-tdbIndex {
 }
 
 # Function to list all indexes
-function Get-tdbIndexes {
+function Get-tdbIndex {
 
     Write-Warning "The indexing feature is experimental and may not work as expected."
 
@@ -859,8 +859,8 @@ function Show-tdbUsage {
     Write-Output "2. Inserting a record: Insert-tdbRecord -TableName 'Users' -Record @{Name='John Doe'; Email='john@example.com'}"
     Write-Output "3. Reading records: Get-tdbRecord -TableName 'Users' -Filter @{Name='John Doe'} -LogicalOperator equals"
     Write-Output "4. Getting table information: Get-tdbTable -TableName 'Users'"
-    Write-Output "5. Updating records: Update-tdbRecords -TableName 'Users' -Filter @{ID=1} -NewValues @{Email='john.doe@example.com'}"
-    Write-Output "6. Deleting records: Remove-tdbRecords -TableName 'Users' -Filter @{ID=1}"
+    Write-Output "5. Updating records: Update-tdbRecord -TableName 'Users' -Filter @{ID=1} -NewValues @{Email='john.doe@example.com'}"
+    Write-Output "6. Deleting records: Remove-tdbRecord -TableName 'Users' -Filter @{ID=1}"
     Write-Output "7. Troubleshooting Tips: Check the log file at `$config.LogFilePath for detailed error messages if any operation fails."
 }
 #endregion Functions
