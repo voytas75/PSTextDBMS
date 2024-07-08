@@ -23,7 +23,7 @@
 
 ## Introduction
 
-The Miniature PowerShell Text Relational Database Management System (tdb) is a lightweight, file-based relational database management system developed using PowerShell. It provides functionalities for data storage, retrieval, update, and deletion operations without the need for complex database software.
+The Miniature PowerShell Text Relational Database Management System (tdb) is a lightweight, file-based relational database management system developed using PowerShell. It provides CRUD operations for data storage, retrieval, update, and deletion operations without the need for complex database software.
 
 ## Installation
 
