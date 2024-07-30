@@ -2,7 +2,7 @@
 
 ![tdb](https://raw.githubusercontent.com/voytas75/tdb/master/images/tdb128x128.png "tdb")
 
-[![PowerShell Gallery](https://img.shields.io/powershellgallery/dt/tdb)](https://www.powershellgallery.com/packages/tdb)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/e091b2e8f2934da599ff6fa51ead2f0c)](https://app.codacy.com/gh/voytas75/tdb/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade) [![PowerShell Gallery](https://img.shields.io/powershellgallery/dt/tdb)](https://www.powershellgallery.com/packages/tdb) 
 
 ## Table of Contents
 
